@@ -42,6 +42,9 @@ const smartBot = async () => {
       await this.page.addScriptTag({
         path: './lib/pathfinding-browser.min.js'
       });
+      await this.page.addScriptTag({
+        path: './src/shared.js'
+      });
       await this.page.exposeFunction('click', async (x, y) => {
         await this.page.click(`#map > tbody > tr:nth-child(${y+1}) > td:nth-child(${x+1})`, {
           delay: INPUT_DELAY,
@@ -70,22 +73,6 @@ const smartBot = async () => {
       await timeout(500);
 
       await this.page.evaluate(async () => {
-        const timeout = ms => new Promise(res => setTimeout(res, ms));
-        let isInit = false;
-        let turnToMove = 0;
-        let color = '';
-        let h = 0;
-        let w = 0;
-        let king = {
-          x: 0,
-          y: 0,
-        };
-
-        const topLimit = 1;
-        const groupLimit = 10;
-        const finder = new PF.AStarFinder();
-        
-        
         
         async function tick() {
           let turn = getTurn();

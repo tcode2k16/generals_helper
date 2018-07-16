@@ -1,3 +1,19 @@
+const timeout = ms => new Promise(res => setTimeout(res, ms));
+
+let isInit = false;
+let turnToMove = 0;
+let color = '';
+let h = 0;
+let w = 0;
+let king = {
+  x: 0,
+  y: 0,
+};
+
+const topLimit = 1;
+const groupLimit = 10;
+const finder = new PF.AStarFinder();
+
 function getCells() {
   return Array.from(document.querySelector('#map').rows)
     .map((e, rowI) =>
