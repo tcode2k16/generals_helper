@@ -4,7 +4,8 @@ const puppeteer = require('puppeteer');
 const timeout = ms => new Promise(res => setTimeout(res, ms));
 
 (async () => {
-  // const gameID = 12345
+  // const gameID = 12345;
+  const INPUT_DELAY = 10;
   const localStoragePath = './gameData.json';
   const groupCount = 10;
   const browser = await puppeteer.launch({
@@ -15,7 +16,7 @@ const timeout = ms => new Promise(res => setTimeout(res, ms));
   await page.setViewport({ width: 1440, height: 780});
 
   // await page.goto('http://generals.io/');
-  await page.goto('http://generals.io/games/12345');
+  await page.goto('http://generals.io/games/imabot');
 
   if (fs.existsSync(localStoragePath) && fs.lstatSync(localStoragePath).isFile()) {
     let storage = fs.readFileSync(localStoragePath, 'utf8');
@@ -34,17 +35,17 @@ const timeout = ms => new Promise(res => setTimeout(res, ms));
   }
 
   await page.addScriptTag({
-    path: '../lib/pathfinding-browser.min.js'
+    path: './lib/pathfinding-browser.min.js'
   });
   await page.exposeFunction('click', async (x, y) => {
     await page.click(`#map > tbody > tr:nth-child(${y+1}) > td:nth-child(${x+1})`, {
-      delay: 10
+      delay: INPUT_DELAY,
     });
   });
 
   await page.exposeFunction('clearSelect', async () => {
     await page.type('#map', ' ', {
-      delay: 10
+      delay: INPUT_DELAY,
     });
   });
   await page.evaluate(async () => {
@@ -52,6 +53,14 @@ const timeout = ms => new Promise(res => setTimeout(res, ms));
     let color = '';
     let h = 0;
     let w = 0;
+    let king = {
+      x: 0,
+      y: 0,
+    };
+    const topLimit = 1;
+    const groupLimit = 10;
+    const finder = new PF.AStarFinder();
+    console.log(PF);
     
     function getCells() {
       return Array.from(document.querySelector('#map').rows)
@@ -357,15 +366,60 @@ const timeout = ms => new Promise(res => setTimeout(res, ms));
     function inRange(x, y) {
       return x >= 0 && x < w && y >= 0 && y < h;
     }
+
+    async function makeMove(from, to) {
+      await window.clearSelect();
+      await window.click(from.x, from.y);
+      await window.click(to.x, to.y);
+    }
     
     function getColor(cells) {
       for (const row of cells) {
         for (const cell of row) {
-          if (cell.kind.indexOf('general') >= 0) {
+          if (cell.kind.indexOf('selected') >= 0) {
             return cell.kind[0];
           }
         }
       }
+    }
+
+    function getGrid(cells) {
+      let matrix = cells.map(row => {
+        return row.map(e => {
+          return e.kind.indexOf(color) >= 0 ? 0 : 1;
+        });
+      });
+      return new PF.Grid(matrix);
+    }
+
+    function getTopCells(topLimit, cells) {
+      let topCells = {};
+      let cellsCount = 0;
+      for (const row of cells) {
+        for (const cell of row) {
+          if (cell.kind.indexOf(color) >= 0 && cell.kind.indexOf('general') < 0 && !isNaN(cell.value) && cell.value > 1) {
+            let v = cell.value;
+            if (topCells[v] === undefined) {
+              topCells[v] = [cell];
+            } else {
+              topCells[v].push(cell);
+            }
+            cellsCount++;
+          }
+        }
+      }
+      console.log(topCells);
+      let limitTop = [];
+      while (limitTop.length < Math.min(topLimit, cellsCount)) {
+        let topKey = Object.keys(topCells).sort((a, b) =>{
+          return parseInt(b) - parseInt(a);
+        })[0];
+        limitTop.push(topCells[topKey].pop());
+        if (topCells[topKey].length < 1) {
+          delete topCells[topKey];
+        }
+      }
+      return limitTop;
     }
     
     document.addEventListener('keydown', async e => {
@@ -375,7 +429,7 @@ const timeout = ms => new Promise(res => setTimeout(res, ms));
     
       let handled = false;
     
-      if (e.keyCode === 70) {   // f -> fill space
+      if (e.keyCode === 67) {   // c -> fill space
         if (!isInit) {
           alert('init first');
           return;
@@ -385,9 +439,7 @@ const timeout = ms => new Promise(res => setTimeout(res, ms));
         console.log('f pressed');
         let expandActions = getExpandActions(getCells());
         for (const move of expandActions) {
-          await window.clearSelect();
-          await window.click(move.from.x, move.from.y);
-          await window.click(move.to.x, move.to.y);
+          await makeMove(move.from, move.to);
         }
       } else if (e.keyCode === 71) {  // g -> group
         if (!isInit) {
@@ -399,9 +451,7 @@ const timeout = ms => new Promise(res => setTimeout(res, ms));
         console.log('g pressed');
         let groupActions = getGroupActions(getCells());
         for (const move of groupActions) {
-          await window.clearSelect();
-          await window.click(move.from.x, move.from.y);
-          await window.click(move.to.x, move.to.y);
+          await makeMove(move.from, move.to);
         }
       } else if (e.keyCode === 69) {  // e -> aggressive fill
         if (!isInit) {
@@ -414,9 +464,44 @@ const timeout = ms => new Promise(res => setTimeout(res, ms));
         let aggressiveActions = getAggressiveActions(getCells());
         console.log(aggressiveActions);
         for (const move of aggressiveActions) {
-          await window.clearSelect();
-          await window.click(move.from.x, move.from.y);
-          await window.click(move.to.x, move.to.y);
+          await makeMove(move.from, move.to);
+        }
+      } else if (e.keyCode == 72) { // h -> go home, save the queen!
+        if (!isInit) {
+          alert('init first');
+          return;
+        }
+    
+        handled = true;
+        console.log('h pressed');
+        let cells = getCells();
+        let grid = getGrid(cells);
+
+        let selected = {};
+
+        for (const row of cells) {
+          for (const each of row) {
+            if (each.kind.indexOf('selected') >= 0) {
+              selected = each;
+            }
+          }
+        }
+
+        let topCells = getTopCells(topLimit, cells);
+        console.log(topCells);
+        for (const from of topCells) {
+          console.log('celled');
+          let path = finder.findPath(from.x, from.y, selected.x, selected.y, grid.clone());
+          console.log(path);
+          for (let i = 0; i < path.length-1; i++) {
+            await makeMove({
+              x: path[i][0],
+              y: path[i][1],
+            }, {
+              x: path[i+1][0],
+              y: path[i+1][1],
+            }, );
+          }
         }
       } else if (e.keyCode === 73) {  // i -> init
         isInit = true;
@@ -424,6 +509,15 @@ const timeout = ms => new Promise(res => setTimeout(res, ms));
         color = getColor(cells);
         h = cells.length;
         w = cells[0].length;
+        
+        for (const row of cells) {
+          for (const each of row) {
+            if (each.kind.indexOf(color) >= 0 && each.kind.indexOf('general') >= 0) {
+              king.x = each.x;
+              king.y = each.y;
+            }
+          }
+        }
         alert('init done');
       }
     
@@ -433,9 +527,8 @@ const timeout = ms => new Promise(res => setTimeout(res, ms));
     });
   });
 
-
-  process.on('SIGINT', async () => {
-    console.log("Caught interrupt signal");
+  const onExit = async () => {
+    console.log('on exit');
     let storage = await page.evaluate(() => {
       let value, storage = {};
       for (let key in localStorage) {
@@ -445,9 +538,13 @@ const timeout = ms => new Promise(res => setTimeout(res, ms));
 
       return storage;
     });
-    fs.writeFileSync(localStoragePath, JSON.stringify(storage))
+    console.log(storage);
+    fs.writeFileSync(localStoragePath, JSON.stringify(storage));
       
     await browser.close()
     process.exit();
-  });
+  };
+
+  process.on('exit', onExit);
+  process.on('SIGINT', onExit);
 })();

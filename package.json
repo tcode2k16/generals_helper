@@ -9,6 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "co-prompt": "^1.0.0",
     "puppeteer": "^1.6.0",
     "terminal-kit": "^1.17.12"
   }
