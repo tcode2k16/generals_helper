@@ -1,4 +1,5 @@
 module.exports = {
   helper: require('./helper'),
-  bot: require('./bot'),
+  smartBot: require('./smartBot'),
+  basicBot: require('./basicBot'),
 };

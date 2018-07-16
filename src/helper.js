@@ -115,7 +115,7 @@ const helper = async () => {
           let yd = y + 1;
           const needItems = [color];
           // let maxActions = cell.value === NaN ? 0 : cell.value - 1;
-          let maxActions = isNaN(cell.value) || cell.value < groupLimit ? 0 : 1;
+          let maxActions = (isNaN(cell.value) || cell.value < groupLimit) ? 0 : 1;
         
           let actions = [];
     
@@ -211,7 +211,7 @@ const helper = async () => {
           let yd = y + 1;
           const avoidItems = [color, 'mountain', 'going to fill', ''];
           // let maxActions = cell.value === NaN ? 0 : cell.value - 1;
-          let maxActions = isNaN(cell.value) || cell.value === 1 ? 0 : 1;
+          let maxActions = (isNaN(cell.value) || cell.value === 1) ? 0 : 1;
         
           let actions = [];
     
@@ -303,7 +303,7 @@ const helper = async () => {
           let yd = y + 1;
         
           // let maxActions = cell.value === NaN ? 0 : cell.value - 1;
-          let maxActions = isNaN(cell.value) || cell.value === 1 ? 0 : 1;
+          let maxActions = (isNaN(cell.value) || cell.value === 1) ? 0 : 1;
         
           let actions = [];
         
