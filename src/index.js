@@ -1,550 +1,92 @@
-const fs = require('fs');
-const puppeteer = require('puppeteer');
+const term = require( 'terminal-kit' ).terminal;
 
+const puppet = require('./puppet');
 const timeout = ms => new Promise(res => setTimeout(res, ms));
 
-(async () => {
-  // const gameID = 12345;
-  const INPUT_DELAY = 10;
-  const localStoragePath = './gameData.json';
-  const groupCount = 10;
-  const browser = await puppeteer.launch({
-    headless: false,
-    // executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google\ Chrome',
-  });
-  const page = await browser.newPage();
-  await page.setViewport({ width: 1440, height: 780});
+async function cli() {
+  const helper = await puppet.helper();
 
-  // await page.goto('http://generals.io/');
-  await page.goto('http://generals.io/games/imabot');
-
-  if (fs.existsSync(localStoragePath) && fs.lstatSync(localStoragePath).isFile()) {
-    let storage = fs.readFileSync(localStoragePath, 'utf8');
-    console.log(storage);
-    try {
-      await page.evaluate((storage) => {
-        for (let key in storage) {
-          localStorage.setItem(key, storage[key]);
+  const cmds = {
+    'c': async () => {
+      term.clear();
+    },
+    'q': async () => {
+      if (helper.isRunning) {
+        await helper.stop();
+      }
+      process.exit();
+    },
+    'g': {
+      '?': async (args) => {
+        const info = [
+          ['gs ?gameID', 'start game'],
+          ['gh',         'stop/halt game'],
+        ];
+        for (const each of info) {
+          term.green(each[0]+': ');
+          
+          term.right(30-each[0].length);
+          term.cyan(each[1]);
+          console.log('');
         }
-      }, JSON.parse(storage));
+      },
+      's': async (args) => {
+        let gameID = '';
+        if (args && args[0]) {
+          gameID = args[0];
+        }
   
-      await page.reload();
-    } catch (e) {
-      console.error(`Error restoring localStorage: ${e.message}`)
-    }
-  }
-
-  await page.addScriptTag({
-    path: './lib/pathfinding-browser.min.js'
-  });
-  await page.exposeFunction('click', async (x, y) => {
-    await page.click(`#map > tbody > tr:nth-child(${y+1}) > td:nth-child(${x+1})`, {
-      delay: INPUT_DELAY,
-    });
-  });
-
-  await page.exposeFunction('clearSelect', async () => {
-    await page.type('#map', ' ', {
-      delay: INPUT_DELAY,
-    });
-  });
-  await page.evaluate(async () => {
-    let isInit = false;
-    let color = '';
-    let h = 0;
-    let w = 0;
-    let king = {
-      x: 0,
-      y: 0,
-    };
-    const topLimit = 1;
-    const groupLimit = 10;
-    const finder = new PF.AStarFinder();
-    console.log(PF);
-    
-    function getCells() {
-      return Array.from(document.querySelector('#map').rows)
-        .map((e, rowI) =>
-          Array.from(e.cells)
-            .map((c, colI) => ({
-                kind: c.className
-                  .replace('small', '')
-                  .replace('large', '')
-                  .replace('tiny', '')
-                  .replace('attackable', '')
-                  .replace('selectable', '')
-                  .trim()
-                  .split(' '),
-                value: parseInt(c.innerHTML),
-                y: rowI,
-                x: colI,
-                el: c
-              })
-            )
-        );
-    }
-    function getGroupActions(cells) {
-      let groupActions = [];
-      for (const row of cells) {
-        for (const cell of row) {
-          if (cell.kind.indexOf(color) >= 0) {
-            let actions = _getGroupAction(cell, cells);
-            groupActions = [
-              ...actions,
-              ...groupActions
-            ];
-          }
+        if (helper.isRunning) {
+          await helper.stop();
         }
-      }
-      return groupActions;
-    }
-    
-    function _getGroupAction(cell, cells) {
-      let x = cell.x;
-      let y = cell.y;
-      let xl = x - 1;
-      let xr = x + 1;
-      let yu = y - 1;
-      let yd = y + 1;
-      const needItems = [color];
-      // let maxActions = cell.value === NaN ? 0 : cell.value - 1;
-      let maxActions = isNaN(cell.value) || cell.value < groupLimit ? 0 : 1;
-    
-      let actions = [];
-
-      if (maxActions > 0 && inRange(xl, y) && cells[y][xl].kind.some(r => needItems.indexOf(r) >= 0) && !isNaN(cells[y][xl].value) && cells[y][xl].value > cell.value) {
-        maxActions--;
-        actions.push({
-          from: {
-            x,
-            y,
-          },
-          to: {
-            x: xl,
-            y
-          }
-        });
-        cells[y][x].value = 1;
-        cells[y][xl].value += cell.value-1;
-      }
-    
-      if (maxActions > 0 && inRange(xr, y) && cells[y][xr].kind.some(r => needItems.indexOf(r) >= 0) && !isNaN(cells[y][xr].value) && cells[y][xr].value > cell.value) {
-        maxActions--;
-        actions.push({
-          from: {
-            x,
-            y,
-          },
-          to: {
-            x: xr,
-            y
-          }
-        });
-        cells[y][x].value = 1;
-        cells[y][xr].value += cell.value-1;
-      }
-    
-      if (maxActions > 0 && inRange(x, yu) && cells[yu][x].kind.some(r => needItems.indexOf(r) >= 0) && !isNaN(cells[yu][x].value) && cells[yu][x].value > cell.value) {
-        maxActions--;
-        actions.push({
-          from: {
-            x,
-            y,
-          },
-          to: {
-            x,
-            y: yu
-          }
-        });
-        cells[y][x].value = 1;
-        cells[yu][x].value += cell.value-1;
-      }
-    
-      if (maxActions > 0 && inRange(x, yd) && cells[yd][x].kind.some(r => needItems.indexOf(r) >= 0) && !isNaN(cells[yd][x].value) && cells[yd][x].value > cell.value) {
-        maxActions--;
-        actions.push({
-          from: {
-            x,
-            y,
-          },
-          to: {
-            x,
-            y: yd
-          }
-        });
-        cells[y][x].value = 1;
-        cells[yd][x].value += cell.value-1;
-      }
-    
-      return actions;
-    }
-
-    function getAggressiveActions(cells) {
-      let aggressiveActions = [];
-      for (const row of cells) {
-        for (const cell of row) {
-          if (cell.kind.indexOf(color) >= 0) {
-            let actions = _getAggressiveAction(cell, cells);
-            aggressiveActions = [
-              ...actions,
-              ...aggressiveActions
-            ];
-          }
-        }
-      }
-      return aggressiveActions;
-    }
-    
-    function _getAggressiveAction(cell, cells) {
-      let x = cell.x;
-      let y = cell.y;
-      let xl = x - 1;
-      let xr = x + 1;
-      let yu = y - 1;
-      let yd = y + 1;
-      const avoidItems = [color, 'mountain', 'going to fill', ''];
-      // let maxActions = cell.value === NaN ? 0 : cell.value - 1;
-      let maxActions = isNaN(cell.value) || cell.value === 1 ? 0 : 1;
-    
-      let actions = [];
-
-      if (maxActions > 0 && inRange(xl, y) && cells[y][xl].kind.every(r => avoidItems.indexOf(r) < 0) && (isNaN(cells[y][xl].value) || cells[y][xl].value+1 < cell.value)) {
-        maxActions--;
-        actions.push({
-          from: {
-            x,
-            y,
-          },
-          to: {
-            x: xl,
-            y
-          }
-        });
-        cells[y][xl].kind[0] = 'going to fill';
-      }
-    
-      if (maxActions > 0 && inRange(xr, y) && cells[y][xr].kind.every(r => avoidItems.indexOf(r) < 0) && (isNaN(cells[y][xr].value) || cells[y][xr].value+1 < cell.value)) {
-        maxActions--;
-        actions.push({
-          from: {
-            x,
-            y,
-          },
-          to: {
-            x: xr,
-            y
-          }
-        });
-        cells[y][xr].kind[0] = 'going to fill';
-      }
-    
-      if (maxActions > 0 && inRange(x, yu) && cells[yu][x].kind.every(r => avoidItems.indexOf(r) < 0) && (isNaN(cells[yu][x].value) || cells[yu][x].value+1 < cell.value)) {
-        maxActions--;
-        actions.push({
-          from: {
-            x,
-            y,
-          },
-          to: {
-            x,
-            y: yu
-          }
-        });
-        cells[yu][x].kind[0] = 'going to fill';
-      }
-    
-      if (maxActions > 0 && inRange(x, yd) && cells[yd][x].kind.every(r => avoidItems.indexOf(r) < 0) && (isNaN(cells[yd][x].value) || cells[yd][x].value+1 < cell.value)) {
-        maxActions--;
-        actions.push({
-          from: {
-            x,
-            y,
-          },
-          to: {
-            x,
-            y: yd
-          }
-        });
-        cells[yd][x].kind[0] = 'going to fill';
-      }
-    
-      return actions;
-    }
-
-    function getExpandActions(cells) {
-      let expandActions = [];
-      for (const row of cells) {
-        for (const cell of row) {
-          if (cell.kind.indexOf(color) >= 0) {
-            let actions = _getExpandAction(cell, cells);
-            expandActions = [
-              ...actions,
-              ...expandActions
-            ];
-          }
-        }
-      }
-      return expandActions;
-    }
-    
-    function _getExpandAction(cell, cells) {
-      let x = cell.x;
-      let y = cell.y;
-      let xl = x - 1;
-      let xr = x + 1;
-      let yu = y - 1;
-      let yd = y + 1;
-    
-      // let maxActions = cell.value === NaN ? 0 : cell.value - 1;
-      let maxActions = isNaN(cell.value) || cell.value === 1 ? 0 : 1;
-    
-      let actions = [];
-    
-      if (maxActions > 0 && inRange(xl, y) && cells[y][xl].kind[0] === '') {
-        maxActions--;
-        actions.push({
-          from: {
-            x,
-            y,
-          },
-          to: {
-            x: xl,
-            y
-          }
-        });
-        cells[y][xl].kind[0] = 'going to fill';
-      }
-    
-      if (maxActions > 0 && inRange(xr, y) && cells[y][xr].kind[0] === '') {
-        maxActions--;
-        actions.push({
-          from: {
-            x,
-            y,
-          },
-          to: {
-            x: xr,
-            y
-          }
-        });
-        cells[y][xr].kind[0] = 'going to fill';
-      }
-    
-      if (maxActions > 0 && inRange(x, yu) && cells[yu][x].kind[0] === '') {
-        maxActions--;
-        actions.push({
-          from: {
-            x,
-            y,
-          },
-          to: {
-            x,
-            y: yu
-          }
-        });
-        cells[yu][x].kind[0] = 'going to fill';
-      }
-    
-      if (maxActions > 0 && inRange(x, yd) && cells[yd][x].kind[0] === '') {
-        maxActions--;
-        actions.push({
-          from: {
-            x,
-            y,
-          },
-          to: {
-            x,
-            y: yd
-          }
-        });
-        cells[yd][x].kind[0] = 'going to fill';
-      }
-    
-      return actions;
-    }
-    
-    function inRange(x, y) {
-      return x >= 0 && x < w && y >= 0 && y < h;
-    }
-
-    async function makeMove(from, to) {
-      await window.clearSelect();
-      await window.click(from.x, from.y);
-      await window.click(to.x, to.y);
-    }
-    
-    function getColor(cells) {
-      for (const row of cells) {
-        for (const cell of row) {
-          if (cell.kind.indexOf('selected') >= 0) {
-            return cell.kind[0];
-          }
+  
+        await helper.start(gameID);
+      },
+      'h': async () => {
+        if (helper.isRunning) {
+          await helper.stop();
         }
       }
     }
+  };  
 
-    function getGrid(cells) {
-      let matrix = cells.map(row => {
-        return row.map(e => {
-          return e.kind.indexOf(color) >= 0 ? 0 : 1;
-        });
+  while (true) {
+    term.yellow( "generals bot> " ) ;
+    let cmd = await new Promise((resolve, reject) => {
+      term.inputField((err, input) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(input);
+        }
       });
-      return new PF.Grid(matrix);
+    }).catch(err => {
+      console.log(err);
+      cmds['q']();
+    });
+    console.log('');
+
+    cmd = cmd.split(' ');
+    cmd[0] = cmd[0].split('');
+
+    let func = cmds;
+
+    if (cmd[0].length < 1) {
+      continue;
     }
 
-    function getTopCells(topLimit, cells) {
-      let topCells = {};
-      let cellsCount = 0;
-      for (const row of cells) {
-        for (const cell of row) {
-          if (cell.kind.indexOf(color) >= 0 && cell.kind.indexOf('general') < 0 && !isNaN(cell.value) && cell.value > 1) {
-            let v = cell.value;
-            if (topCells[v] === undefined) {
-              topCells[v] = [cell];
-            } else {
-              topCells[v].push(cell);
-            }
-            cellsCount++;
-          }
-        }
+    for (const each of cmd[0]) {
+      if (!func[each]) {
+        term.red('unknown command! try again!\n');
+        func = null;
+        break;
       }
-      console.log(topCells);
-      let limitTop = [];
-      while (limitTop.length < Math.min(topLimit, cellsCount)) {
-        let topKey = Object.keys(topCells).sort((a, b) =>{
-          return parseInt(b) - parseInt(a);
-        })[0];
-        limitTop.push(topCells[topKey].pop());
-        if (topCells[topKey].length < 1) {
-          delete topCells[topKey];
-        }
-      }
-      return limitTop;
+      func = func[each];
     }
-    
-    document.addEventListener('keydown', async e => {
-      if (e.defaultPrevented) {
-        return;
-      }
-    
-      let handled = false;
-    
-      if (e.keyCode === 67) {   // c -> fill space
-        if (!isInit) {
-          alert('init first');
-          return;
-        }
-    
-        handled = true;
-        console.log('f pressed');
-        let expandActions = getExpandActions(getCells());
-        for (const move of expandActions) {
-          await makeMove(move.from, move.to);
-        }
-      } else if (e.keyCode === 71) {  // g -> group
-        if (!isInit) {
-          alert('init first');
-          return;
-        }
-    
-        handled = true;
-        console.log('g pressed');
-        let groupActions = getGroupActions(getCells());
-        for (const move of groupActions) {
-          await makeMove(move.from, move.to);
-        }
-      } else if (e.keyCode === 69) {  // e -> aggressive fill
-        if (!isInit) {
-          alert('init first');
-          return;
-        }
-    
-        handled = true;
-        console.log('e pressed');
-        let aggressiveActions = getAggressiveActions(getCells());
-        console.log(aggressiveActions);
-        for (const move of aggressiveActions) {
-          await makeMove(move.from, move.to);
-        }
-      } else if (e.keyCode == 72) { // h -> go home, save the queen!
-        if (!isInit) {
-          alert('init first');
-          return;
-        }
-    
-        handled = true;
-        console.log('h pressed');
-        let cells = getCells();
-        let grid = getGrid(cells);
 
-        let selected = {};
+    if (func) func(cmd.slice(1, cmd.length));
 
-        for (const row of cells) {
-          for (const each of row) {
-            if (each.kind.indexOf('selected') >= 0) {
-              selected = each;
-            }
-          }
-        }
+  }
+}
 
-        let topCells = getTopCells(topLimit, cells);
-        console.log(topCells);
-        for (const from of topCells) {
-          console.log('celled');
-          let path = finder.findPath(from.x, from.y, selected.x, selected.y, grid.clone());
-          console.log(path);
-          for (let i = 0; i < path.length-1; i++) {
-            await makeMove({
-              x: path[i][0],
-              y: path[i][1],
-            }, {
-              x: path[i+1][0],
-              y: path[i+1][1],
-            }, );
-          }
-        }
-      } else if (e.keyCode === 73) {  // i -> init
-        isInit = true;
-        let cells = getCells()
-        color = getColor(cells);
-        h = cells.length;
-        w = cells[0].length;
-        
-        for (const row of cells) {
-          for (const each of row) {
-            if (each.kind.indexOf(color) >= 0 && each.kind.indexOf('general') >= 0) {
-              king.x = each.x;
-              king.y = each.y;
-            }
-          }
-        }
-        alert('init done');
-      }
-    
-      if (handled) {
-        e.preventDefault();
-      }
-    });
-  });
-
-  const onExit = async () => {
-    console.log('on exit');
-    let storage = await page.evaluate(() => {
-      let value, storage = {};
-      for (let key in localStorage) {
-        if (value = localStorage.getItem(key))
-          storage[key] = value;
-      }
-
-      return storage;
-    });
-    console.log(storage);
-    fs.writeFileSync(localStoragePath, JSON.stringify(storage));
-      
-    await browser.close()
-    process.exit();
-  };
-
-  process.on('exit', onExit);
-  process.on('SIGINT', onExit);
-})();
+cli();
