@@ -4,8 +4,7 @@ const puppeteer = require('puppeteer');
 const helper = async () => {
   const INPUT_DELAY = 10;
   const localStoragePath = './gameData.json';
-  const groupCount = 10;
-
+  
   let obj = {
     isRunning: false,
     browser: null,

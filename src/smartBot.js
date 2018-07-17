@@ -1,42 +1,42 @@
-const fs = require('fs');
-const puppeteer = require('puppeteer');
+const headless = require('./headless');
 
 const timeout = ms => new Promise(res => setTimeout(res, ms));
 
-const smartBot = async () => {
+const smartBot = async (browser) => {
   console.log('new smartbot');
   const INPUT_DELAY = 20;
-  const localStoragePath = './botGameData.json';
-  const groupCount = 10;
 
   let obj = {
     isRunning: false,
     browser: null,
     page: null,
-    async start(gameID) {
+    async launch(gameID) {
       this.isRunning = true;
-      this.browser = await puppeteer.launch({
-        // headless: false,
-      });
-      this.page = await this.browser.newPage();
+
+      if (!headless.isRunning) {
+        await headless.start();
+      }
+      this.browser = headless.browser;
+
+      const context = await this.browser.createIncognitoBrowserContext();
+      this.page = await context.newPage();
       
       await this.page.setViewport({ width: 1440, height: 780});
       await this.page.goto(`http://generals.io/games/${gameID}`);
-      
 
-      if (fs.existsSync(localStoragePath) && fs.lstatSync(localStoragePath).isFile()) {
-        let storage = fs.readFileSync(localStoragePath, 'utf8');
-        try {
-          await this.page.evaluate((storage) => {
-            for (let key in storage) {
-              localStorage.setItem(key, storage[key]);
-            }
-          }, JSON.parse(storage));
-      
-          await this.page.reload();
-        } catch (e) {
-          console.error(`Error restoring localStorage: ${e.message}`)
-        }
+      try {
+        await this.page.evaluate((storage) => {
+          for (let key in storage) {
+            localStorage.setItem(key, storage[key]);
+          }
+        }, {
+          "completed_tutorial":"true",
+          "gio_ffa_rules":"true",
+        });
+    
+        await this.page.reload();
+      } catch (e) {
+        console.error(`Error restoring localStorage: ${e.message}`)
       }
 
       await this.page.addScriptTag({
@@ -56,21 +56,39 @@ const smartBot = async () => {
           delay: INPUT_DELAY,
         });
       });
-      await timeout(2000);
-      await this.page.waitForSelector('button:not(.small)', {
-        visible: true,
-      });
-      await timeout(1000);
-      console.log('hi');
+    },
+    async start() {
+      while (true) {
+        try {
+          let started = await this.page.$eval('#map', el => el.style.display !== 'none' || el.style.visibility !== 'hidden');
+          if (!started) {
+            throw "not started";
+          }
+        } catch (e) {
+          try {
+            await this.page.waitForSelector('button:not(.small):not(.inverted)', {
+              visible: true,
+              timeout: 1000,
+            });
+          } catch (err) {
+            continue;
+          }
+  
+          try {
+            await this.page.click('button:not(.small):not(.inverted)', {
+              delay: INPUT_DELAY,
+            });
+          } catch (err) {
+            continue;
+          }
 
-      await this.page.click('button:not(.small)', {
-        delay: INPUT_DELAY,
-      });
-
-      await this.page.waitForSelector('#map', {
-        visible: true
-      });
+          continue;
+        }
+        break;
+      }
+      console.log('game start');
       await timeout(500);
+
 
       await this.page.evaluate(async () => {
         
@@ -124,6 +142,13 @@ const smartBot = async () => {
           console.log('no moves left');
         }
         async function main() {
+          while (true) {
+            if (document.querySelector('#map').rows && document.querySelector('#map').rows.length > 0) {
+              break;
+            }
+            await timeout(200);
+          }
+
           isInit = true;
           let cells = getCells();
           color = getColor(cells);
@@ -167,10 +192,11 @@ const smartBot = async () => {
       });
     },
     async stop() {
-      this.isRunning = false;
       console.log('smartbot exit');  
-      await this.page.close();
-      await this.browser.close();
+      if (headless.isRunning) {
+        await headless.stop();
+      }
+      this.isRunning = false;
     }
   };
   obj.start = obj.start.bind(obj);

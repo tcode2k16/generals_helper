@@ -53,22 +53,33 @@ async function cli() {
     'b': {
       '?': async (args) => {
         printHelp([
-          ['bs gameID', 'start game with smart bot'],
-          ['bh',         'stop/halt game with smart bot'],
+          ['bl gameID ?num', 'launch n smart bots'],
+          ['bS', 'start all created smart bots'],
+          ['bh',         'stop/halt all smart bots'],
         ]);
       },
       's': async (args) => {
+        for (const each of smartBots) {
+          each.start();
+        }
+      },
+      'l': async (args) => {
         if (!args || !args[0]) {
           term.red('need gameID!\n');
           return;
         }
 
+        let num = 1;
+        if (args[1] && !isNaN(parseInt(args[1]))) {
+          num = parseInt(args[1]);
+        }
+
         let gameID = args[0];
-
-        let smartBot = await puppet.smartBot();
-        smartBots.push(smartBot);
-        await smartBot.start(gameID);
-
+        for (let i = 0; i < num; i++) {
+          let smartBot = await puppet.smartBot();
+          smartBots.push(smartBot);
+          await smartBot.launch(gameID);
+        }
       },
       'h': async () => {
         for (const each of smartBots) {
@@ -76,6 +87,7 @@ async function cli() {
             await each.stop();
           }          
         }
+        smartBots = [];
       }
     }
   };  
