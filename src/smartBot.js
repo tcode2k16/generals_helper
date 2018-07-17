@@ -3,7 +3,6 @@ const headless = require('./headless');
 const timeout = ms => new Promise(res => setTimeout(res, ms));
 
 const smartBot = async (browser) => {
-  console.log('new smartbot');
   const INPUT_DELAY = 20;
 
   let obj = {
@@ -56,6 +55,7 @@ const smartBot = async (browser) => {
           delay: INPUT_DELAY,
         });
       });
+      console.log('new smartbot online');
     },
     async start() {
       while (true) {
@@ -119,22 +119,19 @@ const smartBot = async (browser) => {
             return;
           }
 
-          let edgeCells = getEdgeCells(cells);
+          let topCells = getTopCells(topLimit, cells);
+          let edgeCells = getEdgeCells(cells).filter(e => topCells.indexOf(e) < 0);
           let targetCell = edgeCells[Math.floor(Math.random() * edgeCells.length)];
           
           let grid = getGrid(cells);
   
-          let topCells = getTopCells(topLimit, cells);
           for (const from of topCells) {
             let path = finder.findPath(from.x, from.y, targetCell.x, targetCell.y, grid.clone());
             for (let i = 0; i < path.length-1; i++) {
-              await makeMove({
-                x: path[i][0],
-                y: path[i][1],
-              }, {
-                x: path[i+1][0],
-                y: path[i+1][1],
-              });
+              await makeMove(
+                cells[path[i][1]][path[i][0]],
+                cells[path[i+1][1]][path[i+1][0]],
+              );
             }
             return;
           }

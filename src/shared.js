@@ -1,5 +1,6 @@
 const timeout = ms => new Promise(res => setTimeout(res, ms));
 
+let foundKing = false;
 let isInit = false;
 let turnToMove = 0;
 let color = '';
@@ -8,8 +9,11 @@ let w = 0;
 let king = {
   x: 0,
   y: 0,
+  discovered: false,
 };
 
+
+const valuableTiles = ['general', 'city'];
 const topLimit = 1;
 const groupLimit = 10;
 const finder = new PF.AStarFinder();
@@ -18,22 +22,68 @@ function getCells() {
   return Array.from(document.querySelector('#map').rows)
     .map((e, rowI) =>
       Array.from(e.cells)
-        .map((c, colI) => ({
-            kind: c.className
-              .replace('small', '')
-              .replace('large', '')
-              .replace('tiny', '')
-              .replace('attackable', '')
-              .trim()
-              .split(' '),
-            value: parseInt(c.innerHTML),
+        .map((c, colI) => {
+          let kind = c.className
+            .replace('small', '')
+            .replace('large', '')
+            .replace('tiny', '')
+            .replace('attackable', '')
+            .trim()
+            .split(' ');
+          let value = parseInt(c.innerHTML);
+
+          if (isInit && isValuableTile({
+            kind
+          })) {
+            value = Math.floor(value/2);
+          }
+
+          return {
+            kind,
+            value,
             y: rowI,
             x: colI,
-            el: c
-          })
-        )
+            el: c,
+          };
+        })
     );
 }
+
+function _getAction(cell, cells, func) {
+  let x = cell.x;
+  let y = cell.y;
+  let xl = x - 1;
+  let xr = x + 1;
+  let yu = y - 1;
+  let yd = y + 1;
+
+  let borderItems = [
+    { x: xl, y: y, },
+    { x: xr, y: y, },
+    { x: x,  y: yu, },
+    { x: x,  y: yd, },
+  ];
+
+  // check range
+  borderItems = borderItems.filter(e => inRange(e.x, e.y));
+  
+  // convert to action
+  borderItems = borderItems.map(e => ({
+    from: cell,
+    to: cells[e.y][e.x],
+  }));
+  
+  // shuffle
+  let r = Math.floor(Math.random()*borderItems.length);
+  borderItems = [
+    ...borderItems.slice(r),
+    ...borderItems.slice(0, r),
+  ];
+
+  // check condition
+  return borderItems.filter(func);
+}
+
 function getGroupActions(cells) {
   let groupActions = [];
   for (const row of cells) {
@@ -147,79 +197,32 @@ function getAggressiveActions(cells) {
 }
 
 function _getAggressiveAction(cell, cells) {
-  let x = cell.x;
-  let y = cell.y;
-  let xl = x - 1;
-  let xr = x + 1;
-  let yu = y - 1;
-  let yd = y + 1;
   const avoidItems = [color, 'mountain', 'going to fill', ''];
-  // let maxActions = cell.value === NaN ? 0 : cell.value - 1;
-  let maxActions = (isNaN(cell.value) || cell.value === 1) ? 0 : 1;
 
-  let actions = [];
+  if (isNaN(cell.value) || cell.value === 1) return [];
 
-  if (maxActions > 0 && inRange(xl, y) && cells[y][xl].kind.every(r => avoidItems.indexOf(r) < 0) && (isNaN(cells[y][xl].value) || cells[y][xl].value+1 < cell.value)) {
-    maxActions--;
-    actions.push({
-      from: {
-        x,
-        y,
-      },
-      to: {
-        x: xl,
-        y
-      }
-    });
-    cells[y][xl].kind[0] = 'going to fill';
+  let actions = _getAction(cell, cells, ({ from, to }) => {
+    let valid = to.kind.every(r => avoidItems.indexOf(r) < 0) && (isNaN(to.value) || to.value+1 < from.value);
+    if (valid) {
+      to.kind[0] = 'going to fill';
+    }
+    return valid;
+  });
+
+  if (actions.length < 1) return [];
+
+  // see if there is a king or city
+  let townActions = [];
+  for (const action of actions) {
+    if (action.to.kind.indexOf('general') >= 0) {
+      return [action];
+    } else if (action.to.kind.indexOf('city') >= 0) {
+      townActions.push(action);
+    }
   }
 
-  if (maxActions > 0 && inRange(xr, y) && cells[y][xr].kind.every(r => avoidItems.indexOf(r) < 0) && (isNaN(cells[y][xr].value) || cells[y][xr].value+1 < cell.value)) {
-    maxActions--;
-    actions.push({
-      from: {
-        x,
-        y,
-      },
-      to: {
-        x: xr,
-        y
-      }
-    });
-    cells[y][xr].kind[0] = 'going to fill';
-  }
-
-  if (maxActions > 0 && inRange(x, yu) && cells[yu][x].kind.every(r => avoidItems.indexOf(r) < 0) && (isNaN(cells[yu][x].value) || cells[yu][x].value+1 < cell.value)) {
-    maxActions--;
-    actions.push({
-      from: {
-        x,
-        y,
-      },
-      to: {
-        x,
-        y: yu
-      }
-    });
-    cells[yu][x].kind[0] = 'going to fill';
-  }
-
-  if (maxActions > 0 && inRange(x, yd) && cells[yd][x].kind.every(r => avoidItems.indexOf(r) < 0) && (isNaN(cells[yd][x].value) || cells[yd][x].value+1 < cell.value)) {
-    maxActions--;
-    actions.push({
-      from: {
-        x,
-        y,
-      },
-      to: {
-        x,
-        y: yd
-      }
-    });
-    cells[yd][x].kind[0] = 'going to fill';
-  }
-
-  return actions;
+  if (townActions.length > 0) return [townActions[0]];
+  return actions.slice(0, 1);
 }
 
 function getExpandActions(cells) {
@@ -239,87 +242,36 @@ function getExpandActions(cells) {
 }
 
 function _getExpandAction(cell, cells) {
-  let x = cell.x;
-  let y = cell.y;
-  let xl = x - 1;
-  let xr = x + 1;
-  let yu = y - 1;
-  let yd = y + 1;
+  const avoidItems = [color, 'mountain', 'going to fill', ''];
 
-  // let maxActions = cell.value === NaN ? 0 : cell.value - 1;
-  let maxActions = (isNaN(cell.value) || cell.value === 1) ? 0 : 1;
+  if (isNaN(cell.value) || cell.value === 1) return [];
 
-  let actions = [];
+  let actions = _getAction(cell, cells, ({ from, to }) => {
+    let valid = to.kind[0] === '';
+    if (valid) {
+      to.kind[0] = 'going to fill';
+    }
+    return valid;
+  });
 
-  if (maxActions > 0 && inRange(xl, y) && cells[y][xl].kind[0] === '') {
-    maxActions--;
-    actions.push({
-      from: {
-        x,
-        y,
-      },
-      to: {
-        x: xl,
-        y
-      }
-    });
-    cells[y][xl].kind[0] = 'going to fill';
-  }
+  if (actions.length < 1) return [];
 
-  if (maxActions > 0 && inRange(xr, y) && cells[y][xr].kind[0] === '') {
-    maxActions--;
-    actions.push({
-      from: {
-        x,
-        y,
-      },
-      to: {
-        x: xr,
-        y
-      }
-    });
-    cells[y][xr].kind[0] = 'going to fill';
-  }
-
-  if (maxActions > 0 && inRange(x, yu) && cells[yu][x].kind[0] === '') {
-    maxActions--;
-    actions.push({
-      from: {
-        x,
-        y,
-      },
-      to: {
-        x,
-        y: yu
-      }
-    });
-    cells[yu][x].kind[0] = 'going to fill';
-  }
-
-  if (maxActions > 0 && inRange(x, yd) && cells[yd][x].kind[0] === '') {
-    maxActions--;
-    actions.push({
-      from: {
-        x,
-        y,
-      },
-      to: {
-        x,
-        y: yd
-      }
-    });
-    cells[yd][x].kind[0] = 'going to fill';
-  }
-
-  return actions;
+  return actions.slice(0, 1);
 }
 
 function inRange(x, y) {
   return x >= 0 && x < w && y >= 0 && y < h;
 }
 
+function isValuableTile(cell) {
+  return cell.kind.indexOf(color) >= 0 && cell.kind.some(r => valuableTiles.indexOf(r) >= 0);
+}
+
 async function makeMove(from, to) {
   await window.clearSelect();
+  if (isValuableTile(from)) {
+    await window.click(from.x, from.y);
+  }
   await window.click(from.x, from.y);
   await window.click(to.x, to.y);
   turnToMove += 1/2;
@@ -389,7 +341,8 @@ function getTopCells(topLimit, cells) {
   let cellsCount = 0;
   for (const row of cells) {
     for (const cell of row) {
-      if (cell.kind.indexOf(color) >= 0 && cell.kind.indexOf('general') < 0 && !isNaN(cell.value) && cell.value > 1) {
+      // if (cell.kind.indexOf(color) >= 0 && cell.kind.indexOf('general') < 0 && !isNaN(cell.value) && cell.value > 1) {
+        if (cell.kind.indexOf(color) >= 0 && !isNaN(cell.value) && cell.value > 1) {
         let v = cell.value;
         if (topCells[v] === undefined) {
           topCells[v] = [cell];
