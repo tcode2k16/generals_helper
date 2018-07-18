@@ -102,6 +102,19 @@ const smartBot = async (browser) => {
           turnToMove = turn;
           let cells = getCells();
 
+          if (king.isDiscovered) {
+            await burstMove(king.x, king.y, cells);
+            king.isDiscovered = false;
+            return;
+          }
+
+          checkKingBorder(cells);
+
+          let otherKing = getOtherKing(cells);
+          if (otherKing !== null) {
+            await burstMove(otherKing.x, otherKing.y, cells, false);
+            return;
+          }
 
           let aggressiveActions = getAggressiveActions(getCells());
           if (aggressiveActions.length > 0) {
@@ -124,19 +137,23 @@ const smartBot = async (browser) => {
           let targetCell = edgeCells[Math.floor(Math.random() * edgeCells.length)];
           
           let grid = getGrid(cells);
-  
-          for (const from of topCells) {
-            let path = finder.findPath(from.x, from.y, targetCell.x, targetCell.y, grid.clone());
-            for (let i = 0; i < path.length-1; i++) {
-              await makeMove(
-                cells[path[i][1]][path[i][0]],
-                cells[path[i+1][1]][path[i+1][0]],
-              );
+          
+          if (edgeCells.length > 0) {
+            for (const from of topCells) {
+              let path = finder.findPath(from.x, from.y, targetCell.x, targetCell.y, grid.clone());
+              for (let i = 0; i < path.length-1; i++) {
+                await makeMove(
+                  cells[path[i][1]][path[i][0]],
+                  cells[path[i+1][1]][path[i+1][0]],
+                );
+              }
             }
             return;
           }
 
-          console.log('no moves left');
+          return;
+          
+          // console.log('no moves left');
         }
         async function main() {
           while (true) {

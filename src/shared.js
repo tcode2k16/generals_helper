@@ -9,10 +9,11 @@ let w = 0;
 let king = {
   x: 0,
   y: 0,
-  discovered: false,
+  isDiscovered: false,
 };
 
-
+const burstCount = 1;
+const objNotToPass = ['mountain', 'obstacle'];
 const valuableTiles = ['general', 'city'];
 const topLimit = 1;
 const groupLimit = 10;
@@ -49,7 +50,7 @@ function getCells() {
     );
 }
 
-function _getAction(cell, cells, func) {
+function getBorderCells(cell, cells) {
   let x = cell.x;
   let y = cell.y;
   let xl = x - 1;
@@ -64,13 +65,18 @@ function _getAction(cell, cells, func) {
     { x: x,  y: yd, },
   ];
 
-  // check range
-  borderItems = borderItems.filter(e => inRange(e.x, e.y));
+  return borderItems
+    .filter(e => inRange(e.x, e.y))
+    .map(e => cells[e.y][e.x]);
+}
+
+function _getAction(cell, cells, func) {
+  let borderItems = getBorderCells(cell, cells);
   
   // convert to action
   borderItems = borderItems.map(e => ({
     from: cell,
-    to: cells[e.y][e.x],
+    to: e,
   }));
   
   // shuffle
@@ -267,9 +273,9 @@ function isValuableTile(cell) {
   return cell.kind.indexOf(color) >= 0 && cell.kind.some(r => valuableTiles.indexOf(r) >= 0);
 }
 
-async function makeMove(from, to) {
+async function makeMove(from, to, force) {
   await window.clearSelect();
-  if (isValuableTile(from)) {
+  if (isValuableTile(from) && !force) {
     await window.click(from.x, from.y);
   }
   await window.click(from.x, from.y);
@@ -287,10 +293,10 @@ function getColor(cells) {
   }
 }
 
-function getGrid(cells) {
+function getGrid(cells, safe=true) {
   let matrix = cells.map(row => {
     return row.map(e => {
-      return e.kind.indexOf(color) >= 0 ? 0 : 1;
+      return safe ? (e.kind.indexOf(color) >= 0 ? 0 : 1) : (e.kind.some(r => objNotToPass.indexOf(r) >= 0 ? 1 : 0));
     });
   });
   return new PF.Grid(matrix);
@@ -369,4 +375,44 @@ function getTopCells(topLimit, cells) {
 
 function getTurn() {
   return parseInt(document.querySelector('#turn-counter').innerText.split(' ')[1]);
+}
+
+function checkKingBorder(cells) {
+  const borderCells = getBorderCells(cells[king.y][king.x], cells);
+  const safeItems = [color, 'mountain', '']
+  for (const each of borderCells) {
+    if (!each.kind.some(r => safeItems.indexOf(r) >= 0)) {
+      king.isDiscovered = true;
+      return
+    }
+  }
+}
+
+function getOtherKing(cells) {
+  for (const row of cells) {
+    for (const cell of row) {
+      if (cell.kind.indexOf(color) < 0 && cell.kind.indexOf('general') >= 0) {
+        return cell;
+      }
+    }
+  }
+  return null;
+}
+
+async function burstMove(x, y, cells, safe=true) {
+  let topCells = getTopCells(burstCount, cells);
+  let targetCell = cells[y][x];
+  
+  let grid = getGrid(cells, safe);
+
+  for (const from of topCells) {
+    let path = finder.findPath(from.x, from.y, targetCell.x, targetCell.y, grid.clone());
+    for (let i = 0; i < path.length-1; i++) {
+      await makeMove(
+        cells[path[i][1]][path[i][0]],
+        cells[path[i+1][1]][path[i+1][0]],
+        true
+      );
+    }
+  }
 }
