@@ -78,7 +78,7 @@ async function cli() {
         for (let i = 0; i < num; i++) {
           let smartBot = await puppet.smartBot();
           smartBots.push(smartBot);
-          await smartBot.launch(gameID);
+          smartBot.launch(gameID);
         }
       },
       'h': async () => {

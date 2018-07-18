@@ -12,11 +12,19 @@ let king = {
   isDiscovered: false,
 };
 
+let DirectionToKey = {
+  '1,0': 'd',
+  '-1,0': 'a',
+  '0,-1': 'w',
+  '0,1': 's',
+};
+
 const burstCount = 1;
 const objNotToPass = ['mountain', 'obstacle'];
 const valuableTiles = ['general', 'city'];
 const topLimit = 1;
 const groupLimit = 10;
+const initialTurns = 25;
 const finder = new PF.AStarFinder();
 
 function getCells() {
@@ -33,7 +41,7 @@ function getCells() {
             .split(' ');
           let value = parseInt(c.innerHTML);
 
-          if (isInit && isValuableTile({
+          if (turnToMove > initialTurns && isValuableTile({
             kind
           })) {
             value = Math.floor(value/2);
@@ -203,7 +211,7 @@ function getAggressiveActions(cells) {
 }
 
 function _getAggressiveAction(cell, cells) {
-  const avoidItems = [color, 'mountain', 'going to fill', ''];
+  const avoidItems = [color, 'mountain', 'going to fill'];
 
   if (isNaN(cell.value) || cell.value === 1) return [];
 
@@ -275,7 +283,7 @@ function isValuableTile(cell) {
 
 async function makeMove(from, to, force) {
   await window.clearSelect();
-  if (isValuableTile(from) && !force) {
+  if (turnToMove > initialTurns && isValuableTile(from) && !force) {
     await window.click(from.x, from.y);
   }
   await window.click(from.x, from.y);
@@ -404,15 +412,23 @@ async function burstMove(x, y, cells, safe=true) {
   let targetCell = cells[y][x];
   
   let grid = getGrid(cells, safe);
-
+  
+  
+  
   for (const from of topCells) {
+    let typeStr = '';
     let path = finder.findPath(from.x, from.y, targetCell.x, targetCell.y, grid.clone());
+    
+    if (path.length < 1) continue;
+
     for (let i = 0; i < path.length-1; i++) {
-      await makeMove(
-        cells[path[i][1]][path[i][0]],
-        cells[path[i+1][1]][path[i+1][0]],
-        true
-      );
+      typeStr += DirectionToKey[[path[i+1][0]-path[i][0],path[i+1][1]-path[i][1]].toString()];
+      turnToMove += 1/2;
     }
+    console.log(typeStr);
+
+    await window.clearSelect();
+    await window.click(path[0][0], path[0][1]);
+    await window.type(typeStr);
   }
 }

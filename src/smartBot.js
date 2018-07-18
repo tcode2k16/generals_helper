@@ -38,6 +38,16 @@ const smartBot = async (browser) => {
         console.error(`Error restoring localStorage: ${e.message}`)
       }
 
+      this.page.on("pageerror", function(err) {  
+        theTempValue = err.toString();
+        console.log("Page error: " + theTempValue); 
+      });
+
+      this.page.on('console', msg => {
+        for (let i = 0; i < msg.args().length; ++i)
+          console.log(`${i}: ${msg.args()[i]}`);
+      });
+
       await this.page.addScriptTag({
         path: './lib/pathfinding-browser.min.js'
       });
@@ -46,6 +56,12 @@ const smartBot = async (browser) => {
       });
       await this.page.exposeFunction('click', async (x, y) => {
         await this.page.click(`#map > tbody > tr:nth-child(${y+1}) > td:nth-child(${x+1})`, {
+          delay: INPUT_DELAY,
+        });
+      });
+
+      await this.page.exposeFunction('type', async text => {
+        await this.page.type('#map', text, {
           delay: INPUT_DELAY,
         });
       });
@@ -103,7 +119,7 @@ const smartBot = async (browser) => {
           let cells = getCells();
 
           if (king.isDiscovered) {
-            await burstMove(king.x, king.y, cells);
+            await burstMove(king.x, king.y, cells, false);
             king.isDiscovered = false;
             return;
           }
@@ -124,13 +140,13 @@ const smartBot = async (browser) => {
             return;
           }
           
-          let expandActions = getExpandActions(getCells());
-          if (expandActions.length > 0) {
-            for (const move of expandActions) {
-              await makeMove(move.from, move.to);
-            }
-            return;
-          }
+          // let expandActions = getExpandActions(getCells());
+          // if (expandActions.length > 0) {
+          //   for (const move of expandActions) {
+          //     await makeMove(move.from, move.to);
+          //   }
+          //   return;
+          // }
 
           let topCells = getTopCells(topLimit, cells);
           let edgeCells = getEdgeCells(cells).filter(e => topCells.indexOf(e) < 0);
@@ -140,6 +156,7 @@ const smartBot = async (browser) => {
           
           if (edgeCells.length > 0) {
             for (const from of topCells) {
+              if (from.x === targetCell.x && from.y === targetCell.y) continue;
               let path = finder.findPath(from.x, from.y, targetCell.x, targetCell.y, grid.clone());
               for (let i = 0; i < path.length-1; i++) {
                 await makeMove(
