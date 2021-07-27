@@ -28,7 +28,7 @@ const initialTurns = 25;
 const finder = new PF.AStarFinder();
 
 function getCells() {
-  return Array.from(document.querySelector('#map').rows)
+  return Array.from(document.querySelector('#gameMap').rows)
     .map((e, rowI) =>
       Array.from(e.cells)
         .map((c, colI) => {

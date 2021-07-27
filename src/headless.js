@@ -16,7 +16,7 @@ const headless = () => {
       if (!this.isRunning) {
         this.onLock = true;
         this.browser = await puppeteer.launch({
-          // headless: false,
+          headless: false,
         });
         this.isRunning = true;
         this.onLock = false;

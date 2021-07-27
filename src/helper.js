@@ -47,13 +47,13 @@ const helper = async () => {
         path: './src/shared.js'
       });
       await this.page.exposeFunction('click', async (x, y) => {
-        await this.page.click(`#map > tbody > tr:nth-child(${y+1}) > td:nth-child(${x+1})`, {
+        await this.page.click(`#gameMap > tbody > tr:nth-child(${y+1}) > td:nth-child(${x+1})`, {
           delay: INPUT_DELAY,
         });
       });
 
       await this.page.exposeFunction('clearSelect', async () => {
-        await this.page.type('#map', ' ', {
+        await this.page.type('#gameMap', ' ', {
           delay: INPUT_DELAY,
         });
       });

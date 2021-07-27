@@ -55,19 +55,19 @@ const smartBot = async (browser) => {
         path: './src/shared.js'
       });
       await this.page.exposeFunction('click', async (x, y) => {
-        await this.page.click(`#map > tbody > tr:nth-child(${y+1}) > td:nth-child(${x+1})`, {
+        await this.page.click(`#gameMap > tbody > tr:nth-child(${y+1}) > td:nth-child(${x+1})`, {
           delay: INPUT_DELAY,
         });
       });
 
       await this.page.exposeFunction('type', async text => {
-        await this.page.type('#map', text, {
+        await this.page.type('#gameMap', text, {
           delay: INPUT_DELAY,
         });
       });
 
       await this.page.exposeFunction('clearSelect', async () => {
-        await this.page.type('#map', ' ', {
+        await this.page.type('#gameMap', ' ', {
           delay: INPUT_DELAY,
         });
       });
@@ -76,7 +76,7 @@ const smartBot = async (browser) => {
     async start() {
       while (true) {
         try {
-          let started = await this.page.$eval('#map', el => el.style.display !== 'none' || el.style.visibility !== 'hidden');
+          let started = await this.page.$eval('#gameMap', el => el.style.display !== 'none' || el.style.visibility !== 'hidden');
           if (!started) {
             throw "not started";
           }
@@ -174,7 +174,7 @@ const smartBot = async (browser) => {
         }
         async function main() {
           while (true) {
-            if (document.querySelector('#map').rows && document.querySelector('#map').rows.length > 0) {
+            if (document.querySelector('#gameMap').rows && document.querySelector('#gameMap').rows.length > 0) {
               break;
             }
             await timeout(200);
