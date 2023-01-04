@@ -10,6 +10,6 @@
   "license": "ISC",
   "dependencies": {
     "puppeteer": "^10.1.0",
-    "terminal-kit": "^1.17.12"
+    "terminal-kit": "^3.0.0"
   }
 }
